@@ -1,0 +1,13 @@
+__pycache__/
+output/
+local.meta
+.venv
+.vscode
+.DS_Store
+.env
+.pypirc
+*.so
+*.log
+*.pdf
+dist/
+.pytest_cache
