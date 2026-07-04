@@ -1,4 +1,10 @@
 # OCI Logging Add-On 
+## Release 3.0.1
+- Added Python 3.9 compatibility support for Splunk Enterprise 9.x+ (Linux x86_64).
+- Bundled the Python 3.9 `_cffi_backend` C-extension library (`bin/_cffi_backend.cpython-39-x86_64-linux-gnu.so`).
+- Scoped the `python.version = python3.9` configuration strictly under the `[oci_logging]` modular input stanza in `default/inputs.conf`.
+- Removed global `default/server.conf` configuration to prevent settings pollution and dependency conflicts with other Splunk add-ons (Sophos, AWS, GCP, MSCS).
+
 ## Release 3.0.0
 - Validating OCI Streaming endpoint URL for HTTPS 
 - Added support for pasting in OCI API Key.  This can be an RSA key or an OCI Console Key for a LOCAL OCI IAM user.
