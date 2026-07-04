@@ -1,5 +1,5 @@
 # OCI Logging Add-On 
-## Release 3.0.1
+## Release 3.1.0
 - Added Python 3.9 compatibility support for Splunk Enterprise 9.x+ (Linux x86_64).
 - Bundled the Python 3.9 `_cffi_backend` C-extension library (`bin/_cffi_backend.cpython-39-x86_64-linux-gnu.so`).
 - Scoped the `python.version = python3.9` configuration strictly under the `[oci_logging]` modular input stanza in `default/inputs.conf`.
