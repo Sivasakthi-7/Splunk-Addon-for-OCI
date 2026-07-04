@@ -2,11 +2,11 @@
 
 > [!NOTE]
 > **Python 3.9 & Splunk 9.x+ Compatibility Patch Included**
-> This repository contains a pre-applied compatibility patch for running this add-on under **Python 3.9** (standard in Splunk Enterprise 9.x and newer) on Linux x86_64.
+> This repository contains a pre-applied compatibility patch for running this add-on under **Python 3.9** (standard in Splunk Enterprise 9.x and newer) on Linux and Windows x86_64.
 > 
 > **Changes included in this version:**
 > 1. **Scoped Modular Input Runtime:** Updated [default/inputs.conf](file:///Users/apple/Downloads/TA-oci-logging-addon/default/inputs.conf) to set `python.version = python3.9` specifically under the `[oci_logging]` modular input. This ensures it executes under Splunk's default Python 3.9 engine without overriding settings globally.
-> 2. **Multi-version Compiled Dependencies:** Sourced and vendored [bin/lib/_cffi_backend.cpython-39-x86_64-linux-gnu.so](file:///Users/apple/Downloads/TA-oci-logging-addon/bin/lib/_cffi_backend.cpython-39-x86_64-linux-gnu.so) alongside the original Python 3.7 binary. This allows Python 3.9 (on Linux x86_64 Heavy Forwarders) to successfully load the `cryptography` and `cffi` libraries required for OCI API signatures without import errors.
+> 2. **Multi-version Compiled Dependencies:** Sourced and vendored Python 3.9 compiled libraries for both Linux ([bin/_cffi_backend.cpython-39-x86_64-linux-gnu.so](file:///Users/apple/Downloads/TA-oci-logging-addon/bin/_cffi_backend.cpython-39-x86_64-linux-gnu.so)) and Windows ([bin/_cffi_backend.cp39-win_amd64.pyd](file:///Users/apple/Downloads/TA-oci-logging-addon/bin/_cffi_backend.cp39-win_amd64.pyd)) alongside the original Python 3.7 binaries. This allows Python 3.9 (on Linux/Windows x86_64 Heavy Forwarders) to successfully load the `cryptography` and `cffi` libraries required for OCI API signatures without import errors.
 > 
 > *The original archived repository (`oracle-quickstart/oci-arch-logging-splunk`) does not contain this fix.*
 
