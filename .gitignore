@@ -1,13 +1,21 @@
+# Python bytecode
 __pycache__/
-output/
-local.meta
-.venv
-.vscode
+*.pyc
+*.pyo
+*.pyd
+
+# OS metadata
 .DS_Store
-.env
-.pypirc
-*.so
-*.log
-*.pdf
-dist/
-.pytest_cache
+Thumbs.db
+
+# Splunk local changes and lookups
+/local/
+/lookups/*.csv
+
+# Packaging artifacts
+*.tgz
+*.tar.gz
+
+# Temp files
+tmp/
+temp_wheel_download/
