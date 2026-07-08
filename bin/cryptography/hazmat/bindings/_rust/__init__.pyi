@@ -2,33 +2,66 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
-import types
 import typing
 
-def check_pkcs7_padding(data: bytes) -> bool: ...
-def check_ansix923_padding(data: bytes) -> bool: ...
+from cryptography.hazmat.primitives import padding
+from cryptography.hazmat.primitives._serialization import (
+    KeySerializationEncryptionBuilder,
+)
+from cryptography.utils import Buffer
+
+class PKCS7PaddingContext(padding.PaddingContext):
+    def __init__(self, block_size: int) -> None: ...
+    def update(self, data: Buffer) -> bytes: ...
+    def finalize(self) -> bytes: ...
+
+class ANSIX923PaddingContext(padding.PaddingContext):
+    def __init__(self, block_size: int) -> None: ...
+    def update(self, data: Buffer) -> bytes: ...
+    def finalize(self) -> bytes: ...
+
+class PKCS7UnpaddingContext(padding.PaddingContext):
+    def __init__(self, block_size: int) -> None: ...
+    def update(self, data: Buffer) -> bytes: ...
+    def finalize(self) -> bytes: ...
+
+class ANSIX923UnpaddingContext(padding.PaddingContext):
+    def __init__(self, block_size: int) -> None: ...
+    def update(self, data: Buffer) -> bytes: ...
+    def finalize(self) -> bytes: ...
+
+class Encoding:
+    PEM: typing.ClassVar[Encoding]
+    DER: typing.ClassVar[Encoding]
+    OpenSSH: typing.ClassVar[Encoding]
+    Raw: typing.ClassVar[Encoding]
+    X962: typing.ClassVar[Encoding]
+    SMIME: typing.ClassVar[Encoding]
+
+class PrivateFormat:
+    PKCS8: typing.ClassVar[PrivateFormat]
+    TraditionalOpenSSL: typing.ClassVar[PrivateFormat]
+    Raw: typing.ClassVar[PrivateFormat]
+    OpenSSH: typing.ClassVar[PrivateFormat]
+    PKCS12: typing.ClassVar[PrivateFormat]
+    def encryption_builder(self) -> KeySerializationEncryptionBuilder: ...
+
+class PublicFormat:
+    SubjectPublicKeyInfo: typing.ClassVar[PublicFormat]
+    PKCS1: typing.ClassVar[PublicFormat]
+    OpenSSH: typing.ClassVar[PublicFormat]
+    Raw: typing.ClassVar[PublicFormat]
+    CompressedPoint: typing.ClassVar[PublicFormat]
+    UncompressedPoint: typing.ClassVar[PublicFormat]
+
+class ParameterFormat:
+    PKCS3: typing.ClassVar[ParameterFormat]
 
 class ObjectIdentifier:
-    def __init__(self, val: str) -> None: ...
+    def __init__(self, value: str) -> None: ...
     @property
     def dotted_string(self) -> str: ...
     @property
     def _name(self) -> str: ...
 
 T = typing.TypeVar("T")
-
-class FixedPool(typing.Generic[T]):
-    def __init__(
-        self,
-        create: typing.Callable[[], T],
-    ) -> None: ...
-    def acquire(self) -> "PoolAcquisition[T]": ...
-
-class PoolAcquisition(typing.Generic[T]):
-    def __enter__(self) -> T: ...
-    def __exit__(
-        self,
-        exc_type: typing.Optional[typing.Type[BaseException]],
-        exc_value: typing.Optional[BaseException],
-        exc_tb: typing.Optional[types.TracebackType],
-    ) -> None: ...

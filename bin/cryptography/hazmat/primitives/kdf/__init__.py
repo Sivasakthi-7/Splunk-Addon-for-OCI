@@ -2,8 +2,11 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
+from __future__ import annotations
 
 import abc
+
+from cryptography.utils import Buffer
 
 
 class KeyDerivationFunction(metaclass=abc.ABCMeta):
@@ -12,6 +15,13 @@ class KeyDerivationFunction(metaclass=abc.ABCMeta):
         """
         Deterministically generates and returns a new key based on the existing
         key material.
+        """
+
+    @abc.abstractmethod
+    def derive_into(self, key_material: bytes, buffer: Buffer) -> None:
+        """
+        Deterministically generates a new key based on the existing key
+        material and stores it in the provided buffer.
         """
 
     @abc.abstractmethod

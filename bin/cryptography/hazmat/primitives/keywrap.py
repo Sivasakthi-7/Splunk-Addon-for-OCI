@@ -2,6 +2,7 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
+from __future__ import annotations
 
 import typing
 
@@ -14,7 +15,7 @@ from cryptography.hazmat.primitives.constant_time import bytes_eq
 def _wrap_core(
     wrapping_key: bytes,
     a: bytes,
-    r: typing.List[bytes],
+    r: list[bytes],
 ) -> bytes:
     # RFC 3394 Key Wrap - 2.2.1 (index method)
     encryptor = Cipher(AES(wrapping_key), ECB()).encryptor()
@@ -57,8 +58,8 @@ def aes_key_wrap(
 def _unwrap_core(
     wrapping_key: bytes,
     a: bytes,
-    r: typing.List[bytes],
-) -> typing.Tuple[bytes, typing.List[bytes]]:
+    r: list[bytes],
+) -> tuple[bytes, list[bytes]]:
     # Implement RFC 3394 Key Unwrap - 2.2.2 (index method)
     decryptor = Cipher(AES(wrapping_key), ECB()).decryptor()
     n = len(r)
@@ -85,7 +86,10 @@ def aes_key_wrap_with_padding(
     if len(wrapping_key) not in [16, 24, 32]:
         raise ValueError("The wrapping key must be a valid AES key length")
 
-    aiv = b"\xA6\x59\x59\xA6" + len(key_to_wrap).to_bytes(
+    if not key_to_wrap or len(key_to_wrap) > 2**32:
+        raise ValueError("key_to_wrap must be between 1 and 2^32 bytes")
+
+    aiv = b"\xa6\x59\x59\xa6" + len(key_to_wrap).to_bytes(
         length=4, byteorder="big"
     )
     # pad the key to wrap if necessary

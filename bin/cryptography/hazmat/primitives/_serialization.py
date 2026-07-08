@@ -2,10 +2,17 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
+from __future__ import annotations
+
 import abc
-import typing
 
 from cryptography import utils
+from cryptography.hazmat.bindings._rust import Encoding as Encoding
+from cryptography.hazmat.bindings._rust import (
+    ParameterFormat as ParameterFormat,
+)
+from cryptography.hazmat.bindings._rust import PrivateFormat as PrivateFormat
+from cryptography.hazmat.bindings._rust import PublicFormat as PublicFormat
 from cryptography.hazmat.primitives.hashes import HashAlgorithm
 
 # This exists to break an import cycle. These classes are normally accessible
@@ -15,44 +22,6 @@ from cryptography.hazmat.primitives.hashes import HashAlgorithm
 class PBES(utils.Enum):
     PBESv1SHA1And3KeyTripleDESCBC = "PBESv1 using SHA1 and 3-Key TripleDES"
     PBESv2SHA256AndAES256CBC = "PBESv2 using SHA256 PBKDF2 and AES256 CBC"
-
-
-class Encoding(utils.Enum):
-    PEM = "PEM"
-    DER = "DER"
-    OpenSSH = "OpenSSH"
-    Raw = "Raw"
-    X962 = "ANSI X9.62"
-    SMIME = "S/MIME"
-
-
-class PrivateFormat(utils.Enum):
-    PKCS8 = "PKCS8"
-    TraditionalOpenSSL = "TraditionalOpenSSL"
-    Raw = "Raw"
-    OpenSSH = "OpenSSH"
-    PKCS12 = "PKCS12"
-
-    def encryption_builder(self) -> "KeySerializationEncryptionBuilder":
-        if self not in (PrivateFormat.OpenSSH, PrivateFormat.PKCS12):
-            raise ValueError(
-                "encryption_builder only supported with PrivateFormat.OpenSSH"
-                " and PrivateFormat.PKCS12"
-            )
-        return KeySerializationEncryptionBuilder(self)
-
-
-class PublicFormat(utils.Enum):
-    SubjectPublicKeyInfo = "X.509 subjectPublicKeyInfo with PKCS#1"
-    PKCS1 = "Raw PKCS#1"
-    OpenSSH = "OpenSSH"
-    Raw = "Raw"
-    CompressedPoint = "X9.62 Compressed Point"
-    UncompressedPoint = "X9.62 Uncompressed Point"
-
-
-class ParameterFormat(utils.Enum):
-    PKCS3 = "PKCS3"
 
 
 class KeySerializationEncryption(metaclass=abc.ABCMeta):
@@ -71,14 +40,14 @@ class NoEncryption(KeySerializationEncryption):
     pass
 
 
-class KeySerializationEncryptionBuilder(object):
+class KeySerializationEncryptionBuilder:
     def __init__(
         self,
         format: PrivateFormat,
         *,
-        _kdf_rounds: typing.Optional[int] = None,
-        _hmac_hash: typing.Optional[HashAlgorithm] = None,
-        _key_cert_algorithm: typing.Optional[PBES] = None,
+        _kdf_rounds: int | None = None,
+        _hmac_hash: HashAlgorithm | None = None,
+        _key_cert_algorithm: PBES | None = None,
     ) -> None:
         self._format = format
 
@@ -86,7 +55,7 @@ class KeySerializationEncryptionBuilder(object):
         self._hmac_hash = _hmac_hash
         self._key_cert_algorithm = _key_cert_algorithm
 
-    def kdf_rounds(self, rounds: int) -> "KeySerializationEncryptionBuilder":
+    def kdf_rounds(self, rounds: int) -> KeySerializationEncryptionBuilder:
         if self._kdf_rounds is not None:
             raise ValueError("kdf_rounds already set")
 
@@ -105,7 +74,7 @@ class KeySerializationEncryptionBuilder(object):
 
     def hmac_hash(
         self, algorithm: HashAlgorithm
-    ) -> "KeySerializationEncryptionBuilder":
+    ) -> KeySerializationEncryptionBuilder:
         if self._format is not PrivateFormat.PKCS12:
             raise TypeError(
                 "hmac_hash only supported with PrivateFormat.PKCS12"
@@ -122,11 +91,10 @@ class KeySerializationEncryptionBuilder(object):
 
     def key_cert_algorithm(
         self, algorithm: PBES
-    ) -> "KeySerializationEncryptionBuilder":
+    ) -> KeySerializationEncryptionBuilder:
         if self._format is not PrivateFormat.PKCS12:
             raise TypeError(
-                "key_cert_algorithm only supported with "
-                "PrivateFormat.PKCS12"
+                "key_cert_algorithm only supported with PrivateFormat.PKCS12"
             )
         if self._key_cert_algorithm is not None:
             raise ValueError("key_cert_algorithm already set")
@@ -156,9 +124,9 @@ class _KeySerializationEncryption(KeySerializationEncryption):
         format: PrivateFormat,
         password: bytes,
         *,
-        kdf_rounds: typing.Optional[int],
-        hmac_hash: typing.Optional[HashAlgorithm],
-        key_cert_algorithm: typing.Optional[PBES],
+        kdf_rounds: int | None,
+        hmac_hash: HashAlgorithm | None,
+        key_cert_algorithm: PBES | None,
     ):
         self._format = format
         self.password = password

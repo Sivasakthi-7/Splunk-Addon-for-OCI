@@ -2,9 +2,13 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
+from __future__ import annotations
+
 import typing
+from collections.abc import Iterable
 
 from cryptography import x509
+from cryptography.hazmat.bindings._rust import pkcs12 as rust_pkcs12
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives._serialization import PBES as PBES
 from cryptography.hazmat.primitives.asymmetric import (
@@ -14,18 +18,20 @@ from cryptography.hazmat.primitives.asymmetric import (
     ed25519,
     rsa,
 )
-from cryptography.hazmat.primitives.asymmetric.types import PRIVATE_KEY_TYPES
+from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
 __all__ = [
     "PBES",
     "PKCS12Certificate",
     "PKCS12KeyAndCertificates",
+    "PKCS12PrivateKeyTypes",
     "load_key_and_certificates",
     "load_pkcs12",
+    "serialize_java_truststore",
     "serialize_key_and_certificates",
 ]
 
-_ALLOWED_PKCS12_TYPES = typing.Union[
+PKCS12PrivateKeyTypes = typing.Union[
     rsa.RSAPrivateKey,
     dsa.DSAPrivateKey,
     ec.EllipticCurvePrivateKey,
@@ -34,51 +40,15 @@ _ALLOWED_PKCS12_TYPES = typing.Union[
 ]
 
 
-class PKCS12Certificate:
-    def __init__(
-        self,
-        cert: x509.Certificate,
-        friendly_name: typing.Optional[bytes],
-    ):
-        if not isinstance(cert, x509.Certificate):
-            raise TypeError("Expecting x509.Certificate object")
-        if friendly_name is not None and not isinstance(friendly_name, bytes):
-            raise TypeError("friendly_name must be bytes or None")
-        self._cert = cert
-        self._friendly_name = friendly_name
-
-    @property
-    def friendly_name(self) -> typing.Optional[bytes]:
-        return self._friendly_name
-
-    @property
-    def certificate(self) -> x509.Certificate:
-        return self._cert
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, PKCS12Certificate):
-            return NotImplemented
-
-        return (
-            self.certificate == other.certificate
-            and self.friendly_name == other.friendly_name
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.certificate, self.friendly_name))
-
-    def __repr__(self) -> str:
-        return "<PKCS12Certificate({}, friendly_name={!r})>".format(
-            self.certificate, self.friendly_name
-        )
+PKCS12Certificate = rust_pkcs12.PKCS12Certificate
 
 
 class PKCS12KeyAndCertificates:
     def __init__(
         self,
-        key: typing.Optional[PRIVATE_KEY_TYPES],
-        cert: typing.Optional[PKCS12Certificate],
-        additional_certs: typing.List[PKCS12Certificate],
+        key: PrivateKeyTypes | None,
+        cert: PKCS12Certificate | None,
+        additional_certs: list[PKCS12Certificate],
     ):
         if key is not None and not isinstance(
             key,
@@ -109,15 +79,15 @@ class PKCS12KeyAndCertificates:
         self._additional_certs = additional_certs
 
     @property
-    def key(self) -> typing.Optional[PRIVATE_KEY_TYPES]:
+    def key(self) -> PrivateKeyTypes | None:
         return self._key
 
     @property
-    def cert(self) -> typing.Optional[PKCS12Certificate]:
+    def cert(self) -> PKCS12Certificate | None:
         return self._cert
 
     @property
-    def additional_certs(self) -> typing.List[PKCS12Certificate]:
+    def additional_certs(self) -> list[PKCS12Certificate]:
         return self._additional_certs
 
     def __eq__(self, other: object) -> bool:
@@ -140,41 +110,39 @@ class PKCS12KeyAndCertificates:
         return fmt.format(self.key, self.cert, self.additional_certs)
 
 
-def load_key_and_certificates(
-    data: bytes,
-    password: typing.Optional[bytes],
-    backend: typing.Any = None,
-) -> typing.Tuple[
-    typing.Optional[PRIVATE_KEY_TYPES],
-    typing.Optional[x509.Certificate],
-    typing.List[x509.Certificate],
-]:
-    from cryptography.hazmat.backends.openssl.backend import backend as ossl
-
-    return ossl.load_key_and_certificates_from_pkcs12(data, password)
+load_key_and_certificates = rust_pkcs12.load_key_and_certificates
+load_pkcs12 = rust_pkcs12.load_pkcs12
 
 
-def load_pkcs12(
-    data: bytes,
-    password: typing.Optional[bytes],
-    backend: typing.Any = None,
-) -> PKCS12KeyAndCertificates:
-    from cryptography.hazmat.backends.openssl.backend import backend as ossl
-
-    return ossl.load_pkcs12(data, password)
-
-
-_PKCS12_CAS_TYPES = typing.Union[
+_PKCS12CATypes = typing.Union[
     x509.Certificate,
     PKCS12Certificate,
 ]
 
 
+def serialize_java_truststore(
+    certs: Iterable[PKCS12Certificate],
+    encryption_algorithm: serialization.KeySerializationEncryption,
+) -> bytes:
+    if not certs:
+        raise ValueError("You must supply at least one cert")
+
+    if not isinstance(
+        encryption_algorithm, serialization.KeySerializationEncryption
+    ):
+        raise TypeError(
+            "Key encryption algorithm must be a "
+            "KeySerializationEncryption instance"
+        )
+
+    return rust_pkcs12.serialize_java_truststore(certs, encryption_algorithm)
+
+
 def serialize_key_and_certificates(
-    name: typing.Optional[bytes],
-    key: typing.Optional[_ALLOWED_PKCS12_TYPES],
-    cert: typing.Optional[x509.Certificate],
-    cas: typing.Optional[typing.Iterable[_PKCS12_CAS_TYPES]],
+    name: bytes | None,
+    key: PKCS12PrivateKeyTypes | None,
+    cert: x509.Certificate | None,
+    cas: Iterable[_PKCS12CATypes] | None,
     encryption_algorithm: serialization.KeySerializationEncryption,
 ) -> bytes:
     if key is not None and not isinstance(
@@ -191,22 +159,6 @@ def serialize_key_and_certificates(
             "Key must be RSA, DSA, EllipticCurve, ED25519, or ED448"
             " private key, or None."
         )
-    if cert is not None and not isinstance(cert, x509.Certificate):
-        raise TypeError("cert must be a certificate or None")
-
-    if cas is not None:
-        cas = list(cas)
-        if not all(
-            isinstance(
-                val,
-                (
-                    x509.Certificate,
-                    PKCS12Certificate,
-                ),
-            )
-            for val in cas
-        ):
-            raise TypeError("all values in cas must be certificates")
 
     if not isinstance(
         encryption_algorithm, serialization.KeySerializationEncryption
@@ -219,8 +171,6 @@ def serialize_key_and_certificates(
     if key is None and cert is None and not cas:
         raise ValueError("You must supply at least one of key, cert, or cas")
 
-    from cryptography.hazmat.backends.openssl.backend import backend
-
-    return backend.serialize_key_and_certificates_to_pkcs12(
+    return rust_pkcs12.serialize_key_and_certificates(
         name, key, cert, cas, encryption_algorithm
     )

@@ -1,14 +1,14 @@
 # Splunk Addon for Oracle Cloud Infrastructure (OCI)
 
 > [!NOTE]
-> **Python 3.9 & Splunk 9.x+ Compatibility Patch Included**
-> This repository contains a pre-applied compatibility patch for running this add-on under **Python 3.9** (standard in Splunk Enterprise 9.x and newer) on Linux and Windows x86_64.
+> **Splunk 9.x (Python 3.9) & Splunk 10.x (Python 3.13) Compatibility & Security Patch**
+> This repository contains compatibility and security patches for running this add-on under modern Python versions (Python 3.9 & Python 3.12+) on both Linux and Windows.
 > 
-> **Changes included in this version:**
-> 1. **Scoped Modular Input Runtime:** Updated [default/inputs.conf](file:///Users/apple/Downloads/TA-oci-logging-addon/default/inputs.conf) to set `python.version = python3.9` specifically under the `[oci_logging]` modular input. This ensures it executes under Splunk's default Python 3.9 engine without overriding settings globally.
-> 2. **Multi-version Compiled Dependencies:** Sourced and vendored Python 3.9 compiled libraries for both Linux ([bin/_cffi_backend.cpython-39-x86_64-linux-gnu.so](file:///Users/apple/Downloads/TA-oci-logging-addon/bin/_cffi_backend.cpython-39-x86_64-linux-gnu.so)) and Windows ([bin/_cffi_backend.cp39-win_amd64.pyd](file:///Users/apple/Downloads/TA-oci-logging-addon/bin/_cffi_backend.cp39-win_amd64.pyd)) alongside the original Python 3.7 binaries. This allows Python 3.9 (on Linux/Windows x86_64 Heavy Forwarders) to successfully load the `cryptography` and `cffi` libraries required for OCI API signatures without import errors.
-> 
-> *The original archived repository (`oracle-quickstart/oci-arch-logging-splunk`) does not contain this fix.*
+> **Updates included in this version (Release 3.2.0):**
+> 1. **Security Vulnerability Resolution:** Upgraded third-party dependencies to non-vulnerable versions: `cryptography` (to `48.0.1`), `pyopenssl` (to `26.0.0`), and `certifi` (to `2024.7.4`), achieving **0 security vulnerabilities** on SBOM scans.
+> 2. **Splunk 10 (Python 3.12/3.13) Compatibility:** Added a custom import finder (`SplunklibSixRedirectFinder`) inside [bin/oci_logging.py](file:///Users/apple/Downloads/TA-oci-logging-addon/bin/oci_logging.py) to resolve dynamic import issues of `splunklib.six.moves` that occur due to strict PEP 451 import machinery changes in Python 3.12+.
+> 3. **Multi-platform Binary Support:** Sourced and packaged both Linux `_rust.abi3.so` and Windows `_rust.pyd` binary extensions under `bin/cryptography/hazmat/bindings/` to enable fully native and cross-platform executions out-of-the-box.
+> 4. **Scoped Modular Input Runtime:** Scoped modular input configurations inside [default/inputs.conf](file:///Users/apple/Downloads/TA-oci-logging-addon/default/inputs.conf) to execute under `python3.9` or newer without overriding settings globally.
 
 ---
 

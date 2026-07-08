@@ -1,4 +1,9 @@
 # OCI Logging Add-On 
+## Release 3.2.0
+- Upgraded Python dependencies to resolve security vulnerabilities: `cryptography` to `48.0.1`, `pyopenssl` to `26.0.0`, and `certifi` to `2024.7.4` (0 vulnerabilities reported by `grype` scan).
+- Added multi-platform binary support for `cryptography` by bundling both Linux `_rust.abi3.so` and Windows `_rust.pyd` extensions.
+- Resolved Python 3.12+ (Splunk 10.x+) compatibility issues by introducing `SplunklibSixRedirectFinder` inside `oci_logging.py` to dynamically intercept and redirect legacy `splunklib.six.moves` imports.
+
 ## Release 3.1.0
 - Added Python 3.9 compatibility support for Splunk Enterprise 9.x+ (Linux and Windows x86_64).
 - Bundled Python 3.9 compiled libraries for both Linux (`bin/_cffi_backend.cpython-39-x86_64-linux-gnu.so`) and Windows (`bin/_cffi_backend.cp39-win_amd64.pyd`).

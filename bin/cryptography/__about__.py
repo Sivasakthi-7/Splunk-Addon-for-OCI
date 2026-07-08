@@ -2,14 +2,16 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
+from __future__ import annotations
 
 __all__ = [
-    "__version__",
     "__author__",
     "__copyright__",
+    "__version__",
 ]
 
-__version__ = "39.0.2"
+__version__ = "48.0.1"
+
 
 __author__ = "The Python Cryptographic Authority and individual contributors"
-__copyright__ = "Copyright 2013-2023 {}".format(__author__)
+__copyright__ = f"Copyright 2013-2026 {__author__}"

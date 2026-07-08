@@ -2,11 +2,14 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
+from __future__ import annotations
+
 import binascii
 import re
 import sys
 import typing
 import warnings
+from collections.abc import Iterable, Iterator
 
 from cryptography import utils
 from cryptography.hazmat.bindings._rust import x509 as rust_x509
@@ -29,7 +32,7 @@ class _ASN1Type(utils.Enum):
 
 
 _ASN1_TYPE_TO_ENUM = {i.value: i for i in _ASN1Type}
-_NAMEOID_DEFAULT_TYPE: typing.Dict[ObjectIdentifier, _ASN1Type] = {
+_NAMEOID_DEFAULT_TYPE: dict[ObjectIdentifier, _ASN1Type] = {
     NameOID.COUNTRY_NAME: _ASN1Type.PrintableString,
     NameOID.JURISDICTION_COUNTRY_NAME: _ASN1Type.PrintableString,
     NameOID.SERIAL_NUMBER: _ASN1Type.PrintableString,
@@ -57,8 +60,14 @@ _NAMEOID_TO_NAME: _OidNameMap = {
 }
 _NAME_TO_NAMEOID = {v: k for k, v in _NAMEOID_TO_NAME.items()}
 
+_NAMEOID_LENGTH_LIMIT = {
+    NameOID.COUNTRY_NAME: (2, 2),
+    NameOID.JURISDICTION_COUNTRY_NAME: (2, 2),
+    NameOID.COMMON_NAME: (1, 64),
+}
 
-def _escape_dn_value(val: typing.Union[str, bytes]) -> str:
+
+def _escape_dn_value(val: str | bytes) -> str:
     """Escape special characters in RFC4514 Distinguished Name value."""
 
     if not val:
@@ -79,7 +88,7 @@ def _escape_dn_value(val: typing.Union[str, bytes]) -> str:
     val = val.replace(">", "\\>")
     val = val.replace("\0", "\\00")
 
-    if val[0] in ("#", " "):
+    if val[0] == "#" or (val[0] == " " and len(val) > 1):
         val = "\\" + val
     if val[-1] == " ":
         val = val[:-1] + "\\ "
@@ -96,22 +105,32 @@ def _unescape_dn_value(val: str) -> str:
     # special = escaped / SPACE / SHARP / EQUALS
     # escaped = DQUOTE / PLUS / COMMA / SEMI / LANGLE / RANGLE
     def sub(m):
-        val = m.group(1)
-        # Regular escape
-        if len(val) == 1:
-            return val
-        # Hex-value scape
-        return chr(int(val, 16))
+        val = m.group(0)
+        # Special character escape
+        if len(val) == 2:
+            return val[1:]
 
-    return _RFC4514NameParser._PAIR_RE.sub(sub, val)
+        # Unicode string of hex
+        return binascii.unhexlify(val.replace("\\", "")).decode()
+
+    return _RFC4514NameParser._PAIR_MULTI_RE.sub(sub, val)
 
 
-class NameAttribute:
+NameAttributeValueType = typing.TypeVar(
+    "NameAttributeValueType",
+    typing.Union[str, bytes],
+    str,
+    bytes,
+    covariant=True,
+)
+
+
+class NameAttribute(typing.Generic[NameAttributeValueType]):
     def __init__(
         self,
         oid: ObjectIdentifier,
-        value: typing.Union[str, bytes],
-        _type: typing.Optional[_ASN1Type] = None,
+        value: NameAttributeValueType,
+        _type: _ASN1Type | None = None,
         *,
         _validate: bool = True,
     ) -> None:
@@ -126,26 +145,23 @@ class NameAttribute:
                 )
             if not isinstance(value, bytes):
                 raise TypeError("value must be bytes for BitString")
-        else:
-            if not isinstance(value, str):
-                raise TypeError("value argument must be a str")
+        elif not isinstance(value, str):
+            raise TypeError("value argument must be a str")
 
-        if (
-            oid == NameOID.COUNTRY_NAME
-            or oid == NameOID.JURISDICTION_COUNTRY_NAME
-        ):
+        length_limits = _NAMEOID_LENGTH_LIMIT.get(oid)
+        if length_limits is not None:
+            min_length, max_length = length_limits
             assert isinstance(value, str)
             c_len = len(value.encode("utf8"))
-            if c_len != 2 and _validate is True:
-                raise ValueError(
-                    "Country name must be a 2 character country code"
+            if c_len < min_length or c_len > max_length:
+                msg = (
+                    f"Attribute's length must be >= {min_length} and "
+                    f"<= {max_length}, but it was {c_len}"
                 )
-            elif c_len != 2:
-                warnings.warn(
-                    "Country names should be two characters, but the "
-                    "attribute is {} characters in length.".format(c_len),
-                    stacklevel=2,
-                )
+                if _validate is True:
+                    raise ValueError(msg)
+                else:
+                    warnings.warn(msg, stacklevel=2)
 
         # The appropriate ASN1 string type varies by OID and is defined across
         # multiple RFCs including 2459, 3280, and 5280. In general UTF8String
@@ -160,15 +176,15 @@ class NameAttribute:
             raise TypeError("_type must be from the _ASN1Type enum")
 
         self._oid = oid
-        self._value = value
-        self._type = _type
+        self._value: NameAttributeValueType = value
+        self._type: _ASN1Type = _type
 
     @property
     def oid(self) -> ObjectIdentifier:
         return self._oid
 
     @property
-    def value(self) -> typing.Union[str, bytes]:
+    def value(self) -> NameAttributeValueType:
         return self._value
 
     @property
@@ -180,7 +196,7 @@ class NameAttribute:
         return _NAMEOID_TO_NAME.get(self.oid, self.oid.dotted_string)
 
     def rfc4514_string(
-        self, attr_name_overrides: typing.Optional[_OidNameMap] = None
+        self, attr_name_overrides: _OidNameMap | None = None
     ) -> str:
         """
         Format as RFC4514 Distinguished Name string.
@@ -206,11 +222,11 @@ class NameAttribute:
         return hash((self.oid, self.value))
 
     def __repr__(self) -> str:
-        return "<NameAttribute(oid={0.oid}, value={0.value!r})>".format(self)
+        return f"<NameAttribute(oid={self.oid}, value={self.value!r})>"
 
 
 class RelativeDistinguishedName:
-    def __init__(self, attributes: typing.Iterable[NameAttribute]):
+    def __init__(self, attributes: Iterable[NameAttribute[str | bytes]]):
         attributes = list(attributes)
         if not attributes:
             raise ValueError("a relative distinguished name cannot be empty")
@@ -225,12 +241,13 @@ class RelativeDistinguishedName:
             raise ValueError("duplicate attributes are not allowed")
 
     def get_attributes_for_oid(
-        self, oid: ObjectIdentifier
-    ) -> typing.List[NameAttribute]:
+        self,
+        oid: ObjectIdentifier,
+    ) -> list[NameAttribute[str | bytes]]:
         return [i for i in self if i.oid == oid]
 
     def rfc4514_string(
-        self, attr_name_overrides: typing.Optional[_OidNameMap] = None
+        self, attr_name_overrides: _OidNameMap | None = None
     ) -> str:
         """
         Format as RFC4514 Distinguished Name string.
@@ -252,31 +269,31 @@ class RelativeDistinguishedName:
     def __hash__(self) -> int:
         return hash(self._attribute_set)
 
-    def __iter__(self) -> typing.Iterator[NameAttribute]:
+    def __iter__(self) -> Iterator[NameAttribute[str | bytes]]:
         return iter(self._attributes)
 
     def __len__(self) -> int:
         return len(self._attributes)
 
     def __repr__(self) -> str:
-        return "<RelativeDistinguishedName({})>".format(self.rfc4514_string())
+        return f"<RelativeDistinguishedName({self.rfc4514_string()})>"
 
 
 class Name:
     @typing.overload
-    def __init__(self, attributes: typing.Iterable[NameAttribute]) -> None:
-        ...
+    def __init__(
+        self, attributes: Iterable[NameAttribute[str | bytes]]
+    ) -> None: ...
 
     @typing.overload
     def __init__(
-        self, attributes: typing.Iterable[RelativeDistinguishedName]
-    ) -> None:
-        ...
+        self, attributes: Iterable[RelativeDistinguishedName]
+    ) -> None: ...
 
     def __init__(
         self,
-        attributes: typing.Iterable[
-            typing.Union[NameAttribute, RelativeDistinguishedName]
+        attributes: Iterable[
+            NameAttribute[str | bytes] | RelativeDistinguishedName
         ],
     ) -> None:
         attributes = list(attributes)
@@ -287,7 +304,7 @@ class Name:
             ]
         elif all(isinstance(x, RelativeDistinguishedName) for x in attributes):
             self._attributes = typing.cast(
-                typing.List[RelativeDistinguishedName], attributes
+                list[RelativeDistinguishedName], attributes
             )
         else:
             raise TypeError(
@@ -299,12 +316,12 @@ class Name:
     def from_rfc4514_string(
         cls,
         data: str,
-        attr_name_overrides: typing.Optional[_NameOidMap] = None,
-    ) -> "Name":
+        attr_name_overrides: _NameOidMap | None = None,
+    ) -> Name:
         return _RFC4514NameParser(data, attr_name_overrides or {}).parse()
 
     def rfc4514_string(
-        self, attr_name_overrides: typing.Optional[_OidNameMap] = None
+        self, attr_name_overrides: _OidNameMap | None = None
     ) -> str:
         """
         Format as RFC4514 Distinguished Name string.
@@ -322,12 +339,13 @@ class Name:
         )
 
     def get_attributes_for_oid(
-        self, oid: ObjectIdentifier
-    ) -> typing.List[NameAttribute]:
+        self,
+        oid: ObjectIdentifier,
+    ) -> list[NameAttribute[str | bytes]]:
         return [i for i in self if i.oid == oid]
 
     @property
-    def rdns(self) -> typing.List[RelativeDistinguishedName]:
+    def rdns(self) -> list[RelativeDistinguishedName]:
         return self._attributes
 
     def public_bytes(self, backend: typing.Any = None) -> bytes:
@@ -344,25 +362,25 @@ class Name:
         # for you, consider optimizing!
         return hash(tuple(self._attributes))
 
-    def __iter__(self) -> typing.Iterator[NameAttribute]:
+    def __iter__(self) -> Iterator[NameAttribute[str | bytes]]:
         for rdn in self._attributes:
-            for ava in rdn:
-                yield ava
+            yield from rdn
 
     def __len__(self) -> int:
         return sum(len(rdn) for rdn in self._attributes)
 
     def __repr__(self) -> str:
-        rdns = ",".join(attr.rfc4514_string() for attr in self._attributes)
-        return "<Name({})>".format(rdns)
+        return f"<Name({self.rfc4514_string()})>"
 
 
 class _RFC4514NameParser:
     _OID_RE = re.compile(r"(0|([1-9]\d*))(\.(0|([1-9]\d*)))+")
     _DESCR_RE = re.compile(r"[a-zA-Z][a-zA-Z\d-]*")
 
-    _PAIR = r"\\([\\ #=\"\+,;<>]|[\da-zA-Z]{2})"
-    _PAIR_RE = re.compile(_PAIR)
+    _ESCAPE_SPECIAL = r"[\\ #=\"\+,;<>]"
+    _ESCAPE_HEX = r"[\da-zA-Z]{2}"
+    _PAIR = rf"\\({_ESCAPE_SPECIAL}|{_ESCAPE_HEX})"
+    _PAIR_MULTI_RE = re.compile(rf"(\\{_ESCAPE_SPECIAL})|((\\{_ESCAPE_HEX})+)")
     _LUTF1 = r"[\x01-\x1f\x21\x24-\x2A\x2D-\x3A\x3D\x3F-\x5B\x5D-\x7F]"
     _SUTF1 = r"[\x01-\x21\x23-\x2A\x2D-\x3A\x3D\x3F-\x5B\x5D-\x7F]"
     _TUTF1 = r"[\x01-\x1F\x21\x23-\x2A\x2D-\x3A\x3D\x3F-\x5B\x5D-\x7F]"
@@ -393,7 +411,7 @@ class _RFC4514NameParser:
     def _has_data(self) -> bool:
         return self._idx < len(self._data)
 
-    def _peek(self) -> typing.Optional[str]:
+    def _peek(self) -> str | None:
         if self._has_data():
             return self._data[self._idx]
         return None
@@ -420,6 +438,10 @@ class _RFC4514NameParser:
         we parse it, we need to reverse again to get the RDNs on the
         correct order.
         """
+
+        if not self._has_data():
+            return Name([])
+
         rdns = [self._parse_rdn()]
 
         while self._has_data():
@@ -436,7 +458,7 @@ class _RFC4514NameParser:
 
         return RelativeDistinguishedName(nas)
 
-    def _parse_na(self) -> NameAttribute:
+    def _parse_na(self) -> NameAttribute[str]:
         try:
             oid_value = self._read_re(self._OID_RE)
         except ValueError:

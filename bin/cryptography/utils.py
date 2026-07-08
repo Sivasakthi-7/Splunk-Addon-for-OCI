@@ -2,17 +2,18 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
+from __future__ import annotations
 
-import abc
 import enum
 import sys
 import types
 import typing
 import warnings
+from collections.abc import Callable, Sequence
 
 
 # We use a UserWarning subclass, instead of DeprecationWarning, because CPython
-# decided deprecation warnings should be invisble by default.
+# decided deprecation warnings should be invisible by default.
 class CryptographyDeprecationWarning(UserWarning):
     pass
 
@@ -21,39 +22,41 @@ class CryptographyDeprecationWarning(UserWarning):
 # ubiquity of their use. They should not be removed until we agree on when that
 # cycle ends.
 DeprecatedIn36 = CryptographyDeprecationWarning
-DeprecatedIn37 = CryptographyDeprecationWarning
-DeprecatedIn39 = CryptographyDeprecationWarning
+DeprecatedIn40 = CryptographyDeprecationWarning
+DeprecatedIn41 = CryptographyDeprecationWarning
+DeprecatedIn42 = CryptographyDeprecationWarning
+DeprecatedIn43 = CryptographyDeprecationWarning
+DeprecatedIn47 = CryptographyDeprecationWarning
+
+
+# If you're wondering why we don't use `Buffer`, it's because `Buffer` would
+# be more accurately named: Bufferable. It means something which has an
+# `__buffer__`. Which means you can't actually treat the result as a buffer
+# (and do things like take a `len()`).
+Buffer = typing.Union[bytes, bytearray, memoryview]
 
 
 def _check_bytes(name: str, value: bytes) -> None:
     if not isinstance(value, bytes):
-        raise TypeError("{} must be bytes".format(name))
+        raise TypeError(f"{name} must be bytes")
 
 
-def _check_byteslike(name: str, value: bytes) -> None:
+def _check_byteslike(name: str, value: Buffer) -> None:
     try:
         memoryview(value)
     except TypeError:
-        raise TypeError("{} must be bytes-like".format(name))
+        raise TypeError(f"{name} must be bytes-like")
 
 
-def int_to_bytes(integer: int, length: typing.Optional[int] = None) -> bytes:
+def int_to_bytes(integer: int, length: int | None = None) -> bytes:
+    if length == 0:
+        raise ValueError("length argument can't be 0")
     return integer.to_bytes(
         length or (integer.bit_length() + 7) // 8 or 1, "big"
     )
 
 
 class InterfaceNotImplemented(Exception):
-    pass
-
-
-# DeprecatedIn39 -- Our only known consumer is aws-encryption-sdk, but we've
-# made this a no-op to avoid breaking old versions.
-def verify_interface(
-    iface: abc.ABCMeta, klass: object, *, check_annotations: bool = False
-):
-    # Exists exclusively for `aws-encryption-sdk` which relies on it existing,
-    # even though it was never a public API.
     pass
 
 
@@ -69,8 +72,8 @@ class _ModuleWithDeprecations(types.ModuleType):
         super().__init__(module.__name__)
         self.__dict__["_module"] = module
 
-    def __getattr__(self, attr: str) -> object:
-        obj = getattr(self._module, attr)
+    def __getattr__(self, name: str) -> typing.Any:
+        obj = getattr(self._module, name)
         if isinstance(obj, _DeprecatedValue):
             warnings.warn(obj.message, obj.warning_class, stacklevel=2)
             obj = obj.value
@@ -86,16 +89,16 @@ class _ModuleWithDeprecations(types.ModuleType):
 
         delattr(self._module, attr)
 
-    def __dir__(self) -> typing.Sequence[str]:
-        return ["_module"] + dir(self._module)
+    def __dir__(self) -> Sequence[str]:
+        return ["_module", *dir(self._module)]
 
 
 def deprecated(
     value: object,
     module_name: str,
     message: str,
-    warning_class: typing.Type[Warning],
-    name: typing.Optional[str] = None,
+    warning_class: type[Warning],
+    name: str | None = None,
 ) -> _DeprecatedValue:
     module = sys.modules[module_name]
     if not isinstance(module, _ModuleWithDeprecations):
@@ -107,8 +110,8 @@ def deprecated(
     return dv
 
 
-def cached_property(func: typing.Callable) -> property:
-    cached_name = "_cached_{}".format(func)
+def cached_property(func: Callable) -> property:
+    cached_name = f"_cached_{func}"
     sentinel = object()
 
     def inner(instance: object):

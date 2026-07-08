@@ -2,6 +2,7 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
+from __future__ import annotations
 
 import base64
 import typing
@@ -10,16 +11,17 @@ from urllib.parse import quote, urlencode
 from cryptography.hazmat.primitives import constant_time, hmac
 from cryptography.hazmat.primitives.hashes import SHA1, SHA256, SHA512
 from cryptography.hazmat.primitives.twofactor import InvalidToken
+from cryptography.utils import Buffer
 
-_ALLOWED_HASH_TYPES = typing.Union[SHA1, SHA256, SHA512]
+HOTPHashTypes = typing.Union[SHA1, SHA256, SHA512]
 
 
 def _generate_uri(
-    hotp: "HOTP",
+    hotp: HOTP,
     type_name: str,
     account_name: str,
-    issuer: typing.Optional[str],
-    extra_parameters: typing.List[typing.Tuple[str, int]],
+    issuer: str | None,
+    extra_parameters: list[tuple[str, int]],
 ) -> str:
     parameters = [
         ("digits", hotp._length),
@@ -43,9 +45,9 @@ def _generate_uri(
 class HOTP:
     def __init__(
         self,
-        key: bytes,
+        key: Buffer,
         length: int,
-        algorithm: _ALLOWED_HASH_TYPES,
+        algorithm: HOTPHashTypes,
         backend: typing.Any = None,
         enforce_key_length: bool = True,
     ) -> None:
@@ -66,6 +68,9 @@ class HOTP:
         self._algorithm = algorithm
 
     def generate(self, counter: int) -> bytes:
+        if not isinstance(counter, int):
+            raise TypeError("Counter parameter must be an integer type.")
+
         truncated_value = self._dynamic_truncate(counter)
         hotp = truncated_value % (10**self._length)
         return "{0:0{1}}".format(hotp, self._length).encode()
@@ -76,7 +81,12 @@ class HOTP:
 
     def _dynamic_truncate(self, counter: int) -> int:
         ctx = hmac.HMAC(self._key, self._algorithm)
-        ctx.update(counter.to_bytes(length=8, byteorder="big"))
+
+        try:
+            ctx.update(counter.to_bytes(length=8, byteorder="big"))
+        except OverflowError:
+            raise ValueError(f"Counter must be between 0 and {2**64 - 1}.")
+
         hmac_value = ctx.finalize()
 
         offset = hmac_value[len(hmac_value) - 1] & 0b1111
@@ -84,7 +94,7 @@ class HOTP:
         return int.from_bytes(p, byteorder="big") & 0x7FFFFFFF
 
     def get_provisioning_uri(
-        self, account_name: str, counter: int, issuer: typing.Optional[str]
+        self, account_name: str, counter: int, issuer: str | None
     ) -> str:
         return _generate_uri(
             self, "hotp", account_name, issuer, [("counter", int(counter))]

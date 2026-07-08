@@ -2,12 +2,15 @@
 # 2.0, and the BSD License. See the LICENSE file in the root of this repository
 # for complete details.
 
+from __future__ import annotations
 
 import abc
 import typing
 
 from cryptography import utils
+from cryptography.exceptions import UnsupportedAlgorithm, _Reasons
 from cryptography.hazmat._oid import ObjectIdentifier
+from cryptography.hazmat.bindings._rust import openssl as rust_openssl
 from cryptography.hazmat.primitives import _serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import utils as asym_utils
 
@@ -22,16 +25,6 @@ class EllipticCurveOID:
     BRAINPOOLP256R1 = ObjectIdentifier("1.3.36.3.3.2.8.1.1.7")
     BRAINPOOLP384R1 = ObjectIdentifier("1.3.36.3.3.2.8.1.1.11")
     BRAINPOOLP512R1 = ObjectIdentifier("1.3.36.3.3.2.8.1.1.13")
-    SECT163K1 = ObjectIdentifier("1.3.132.0.1")
-    SECT163R2 = ObjectIdentifier("1.3.132.0.15")
-    SECT233K1 = ObjectIdentifier("1.3.132.0.26")
-    SECT233R1 = ObjectIdentifier("1.3.132.0.27")
-    SECT283K1 = ObjectIdentifier("1.3.132.0.16")
-    SECT283R1 = ObjectIdentifier("1.3.132.0.17")
-    SECT409K1 = ObjectIdentifier("1.3.132.0.36")
-    SECT409R1 = ObjectIdentifier("1.3.132.0.37")
-    SECT571K1 = ObjectIdentifier("1.3.132.0.38")
-    SECT571R1 = ObjectIdentifier("1.3.132.0.39")
 
 
 class EllipticCurve(metaclass=abc.ABCMeta):
@@ -49,13 +42,20 @@ class EllipticCurve(metaclass=abc.ABCMeta):
         Bit size of a secret scalar for the curve.
         """
 
+    @property
+    @abc.abstractmethod
+    def group_order(self) -> int:
+        """
+        The order of the curve's group.
+        """
+
 
 class EllipticCurveSignatureAlgorithm(metaclass=abc.ABCMeta):
     @property
     @abc.abstractmethod
     def algorithm(
         self,
-    ) -> typing.Union[asym_utils.Prehashed, hashes.HashAlgorithm]:
+    ) -> asym_utils.Prehashed | hashes.HashAlgorithm:
         """
         The digest algorithm used with this signature.
         """
@@ -64,7 +64,7 @@ class EllipticCurveSignatureAlgorithm(metaclass=abc.ABCMeta):
 class EllipticCurvePrivateKey(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def exchange(
-        self, algorithm: "ECDH", peer_public_key: "EllipticCurvePublicKey"
+        self, algorithm: ECDH, peer_public_key: EllipticCurvePublicKey
     ) -> bytes:
         """
         Performs a key exchange operation using the provided algorithm with the
@@ -72,7 +72,7 @@ class EllipticCurvePrivateKey(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def public_key(self) -> "EllipticCurvePublicKey":
+    def public_key(self) -> EllipticCurvePublicKey:
         """
         The EllipticCurvePublicKey for this private key.
         """
@@ -94,7 +94,7 @@ class EllipticCurvePrivateKey(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def sign(
         self,
-        data: bytes,
+        data: utils.Buffer,
         signature_algorithm: EllipticCurveSignatureAlgorithm,
     ) -> bytes:
         """
@@ -102,7 +102,7 @@ class EllipticCurvePrivateKey(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def private_numbers(self) -> "EllipticCurvePrivateNumbers":
+    def private_numbers(self) -> EllipticCurvePrivateNumbers:
         """
         Returns an EllipticCurvePrivateNumbers.
         """
@@ -118,8 +118,21 @@ class EllipticCurvePrivateKey(metaclass=abc.ABCMeta):
         Returns the key serialized as bytes.
         """
 
+    @abc.abstractmethod
+    def __copy__(self) -> EllipticCurvePrivateKey:
+        """
+        Returns a copy.
+        """
+
+    @abc.abstractmethod
+    def __deepcopy__(self, memo: dict) -> EllipticCurvePrivateKey:
+        """
+        Returns a deep copy.
+        """
+
 
 EllipticCurvePrivateKeyWithSerialization = EllipticCurvePrivateKey
+EllipticCurvePrivateKey.register(rust_openssl.ec.ECPrivateKey)
 
 
 class EllipticCurvePublicKey(metaclass=abc.ABCMeta):
@@ -138,7 +151,7 @@ class EllipticCurvePublicKey(metaclass=abc.ABCMeta):
         """
 
     @abc.abstractmethod
-    def public_numbers(self) -> "EllipticCurvePublicNumbers":
+    def public_numbers(self) -> EllipticCurvePublicNumbers:
         """
         Returns an EllipticCurvePublicNumbers.
         """
@@ -156,8 +169,8 @@ class EllipticCurvePublicKey(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def verify(
         self,
-        signature: bytes,
-        data: bytes,
+        signature: utils.Buffer,
+        data: utils.Buffer,
         signature_algorithm: EllipticCurveSignatureAlgorithm,
     ) -> None:
         """
@@ -167,11 +180,8 @@ class EllipticCurvePublicKey(metaclass=abc.ABCMeta):
     @classmethod
     def from_encoded_point(
         cls, curve: EllipticCurve, data: bytes
-    ) -> "EllipticCurvePublicKey":
+    ) -> EllipticCurvePublicKey:
         utils._check_bytes("data", data)
-
-        if not isinstance(curve, EllipticCurve):
-            raise TypeError("curve must be an EllipticCurve instance")
 
         if len(data) == 0:
             raise ValueError("data must not be an empty byte string")
@@ -179,154 +189,143 @@ class EllipticCurvePublicKey(metaclass=abc.ABCMeta):
         if data[0] not in [0x02, 0x03, 0x04]:
             raise ValueError("Unsupported elliptic curve point type")
 
-        from cryptography.hazmat.backends.openssl.backend import backend
+        return rust_openssl.ec.from_public_bytes(curve, data)
 
-        return backend.load_elliptic_curve_public_bytes(curve, data)
+    @abc.abstractmethod
+    def __eq__(self, other: object) -> bool:
+        """
+        Checks equality.
+        """
+
+    @abc.abstractmethod
+    def __copy__(self) -> EllipticCurvePublicKey:
+        """
+        Returns a copy.
+        """
+
+    @abc.abstractmethod
+    def __deepcopy__(self, memo: dict) -> EllipticCurvePublicKey:
+        """
+        Returns a deep copy.
+        """
 
 
 EllipticCurvePublicKeyWithSerialization = EllipticCurvePublicKey
+EllipticCurvePublicKey.register(rust_openssl.ec.ECPublicKey)
 
-
-class SECT571R1(EllipticCurve):
-    name = "sect571r1"
-    key_size = 570
-
-
-class SECT409R1(EllipticCurve):
-    name = "sect409r1"
-    key_size = 409
-
-
-class SECT283R1(EllipticCurve):
-    name = "sect283r1"
-    key_size = 283
-
-
-class SECT233R1(EllipticCurve):
-    name = "sect233r1"
-    key_size = 233
-
-
-class SECT163R2(EllipticCurve):
-    name = "sect163r2"
-    key_size = 163
-
-
-class SECT571K1(EllipticCurve):
-    name = "sect571k1"
-    key_size = 571
-
-
-class SECT409K1(EllipticCurve):
-    name = "sect409k1"
-    key_size = 409
-
-
-class SECT283K1(EllipticCurve):
-    name = "sect283k1"
-    key_size = 283
-
-
-class SECT233K1(EllipticCurve):
-    name = "sect233k1"
-    key_size = 233
-
-
-class SECT163K1(EllipticCurve):
-    name = "sect163k1"
-    key_size = 163
+EllipticCurvePrivateNumbers = rust_openssl.ec.EllipticCurvePrivateNumbers
+EllipticCurvePublicNumbers = rust_openssl.ec.EllipticCurvePublicNumbers
 
 
 class SECP521R1(EllipticCurve):
     name = "secp521r1"
     key_size = 521
+    group_order = 0x1FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFA51868783BF2F966B7FCC0148F709A5D03BB5C9B8899C47AEBB6FB71E91386409  # noqa: E501
 
 
 class SECP384R1(EllipticCurve):
     name = "secp384r1"
     key_size = 384
+    group_order = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC7634D81F4372DDF581A0DB248B0A77AECEC196ACCC52973  # noqa: E501
 
 
 class SECP256R1(EllipticCurve):
     name = "secp256r1"
     key_size = 256
+    group_order = (
+        0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551
+    )
 
 
 class SECP256K1(EllipticCurve):
     name = "secp256k1"
     key_size = 256
+    group_order = (
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141
+    )
 
 
 class SECP224R1(EllipticCurve):
     name = "secp224r1"
     key_size = 224
+    group_order = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFF16A2E0B8F03E13DD29455C5C2A3D
 
 
 class SECP192R1(EllipticCurve):
     name = "secp192r1"
     key_size = 192
+    group_order = 0xFFFFFFFFFFFFFFFFFFFFFFFF99DEF836146BC9B1B4D22831
 
 
 class BrainpoolP256R1(EllipticCurve):
     name = "brainpoolP256r1"
     key_size = 256
+    group_order = (
+        0xA9FB57DBA1EEA9BC3E660A909D838D718C397AA3B561A6F7901E0E82974856A7
+    )
 
 
 class BrainpoolP384R1(EllipticCurve):
     name = "brainpoolP384r1"
     key_size = 384
+    group_order = 0x8CB91E82A3386D280F5D6F7E50E641DF152F7109ED5456B31F166E6CAC0425A7CF3AB6AF6B7FC3103B883202E9046565  # noqa: E501
 
 
 class BrainpoolP512R1(EllipticCurve):
     name = "brainpoolP512r1"
     key_size = 512
+    group_order = 0xAADD9DB8DBE9C48B3FD4E6AE33C9FC07CB308DB3B3C9D20ED6639CCA70330870553E5C414CA92619418661197FAC10471DB1D381085DDADDB58796829CA90069  # noqa: E501
 
 
-_CURVE_TYPES: typing.Dict[str, typing.Type[EllipticCurve]] = {
-    "prime192v1": SECP192R1,
-    "prime256v1": SECP256R1,
-    "secp192r1": SECP192R1,
-    "secp224r1": SECP224R1,
-    "secp256r1": SECP256R1,
-    "secp384r1": SECP384R1,
-    "secp521r1": SECP521R1,
-    "secp256k1": SECP256K1,
-    "sect163k1": SECT163K1,
-    "sect233k1": SECT233K1,
-    "sect283k1": SECT283K1,
-    "sect409k1": SECT409K1,
-    "sect571k1": SECT571K1,
-    "sect163r2": SECT163R2,
-    "sect233r1": SECT233R1,
-    "sect283r1": SECT283R1,
-    "sect409r1": SECT409R1,
-    "sect571r1": SECT571R1,
-    "brainpoolP256r1": BrainpoolP256R1,
-    "brainpoolP384r1": BrainpoolP384R1,
-    "brainpoolP512r1": BrainpoolP512R1,
+_CURVE_TYPES: dict[str, EllipticCurve] = {
+    "prime192v1": SECP192R1(),
+    "prime256v1": SECP256R1(),
+    "secp192r1": SECP192R1(),
+    "secp224r1": SECP224R1(),
+    "secp256r1": SECP256R1(),
+    "secp384r1": SECP384R1(),
+    "secp521r1": SECP521R1(),
+    "secp256k1": SECP256K1(),
+    "brainpoolP256r1": BrainpoolP256R1(),
+    "brainpoolP384r1": BrainpoolP384R1(),
+    "brainpoolP512r1": BrainpoolP512R1(),
 }
 
 
 class ECDSA(EllipticCurveSignatureAlgorithm):
     def __init__(
         self,
-        algorithm: typing.Union[asym_utils.Prehashed, hashes.HashAlgorithm],
+        algorithm: asym_utils.Prehashed | hashes.HashAlgorithm,
+        deterministic_signing: bool = False,
     ):
+        from cryptography.hazmat.backends.openssl.backend import backend
+
+        if (
+            deterministic_signing
+            and not backend.ecdsa_deterministic_supported()
+        ):
+            raise UnsupportedAlgorithm(
+                "ECDSA with deterministic signature (RFC 6979) is not "
+                "supported by this version of OpenSSL.",
+                _Reasons.UNSUPPORTED_PUBLIC_KEY_ALGORITHM,
+            )
         self._algorithm = algorithm
+        self._deterministic_signing = deterministic_signing
 
     @property
     def algorithm(
         self,
-    ) -> typing.Union[asym_utils.Prehashed, hashes.HashAlgorithm]:
+    ) -> asym_utils.Prehashed | hashes.HashAlgorithm:
         return self._algorithm
 
+    @property
+    def deterministic_signing(
+        self,
+    ) -> bool:
+        return self._deterministic_signing
 
-def generate_private_key(
-    curve: EllipticCurve, backend: typing.Any = None
-) -> EllipticCurvePrivateKey:
-    from cryptography.hazmat.backends.openssl.backend import backend as ossl
 
-    return ossl.generate_elliptic_curve_private_key(curve)
+generate_private_key = rust_openssl.ec.generate_private_key
 
 
 def derive_private_key(
@@ -334,116 +333,13 @@ def derive_private_key(
     curve: EllipticCurve,
     backend: typing.Any = None,
 ) -> EllipticCurvePrivateKey:
-    from cryptography.hazmat.backends.openssl.backend import backend as ossl
-
     if not isinstance(private_value, int):
         raise TypeError("private_value must be an integer type.")
 
     if private_value <= 0:
         raise ValueError("private_value must be a positive integer.")
 
-    if not isinstance(curve, EllipticCurve):
-        raise TypeError("curve must provide the EllipticCurve interface.")
-
-    return ossl.derive_elliptic_curve_private_key(private_value, curve)
-
-
-class EllipticCurvePublicNumbers:
-    def __init__(self, x: int, y: int, curve: EllipticCurve):
-        if not isinstance(x, int) or not isinstance(y, int):
-            raise TypeError("x and y must be integers.")
-
-        if not isinstance(curve, EllipticCurve):
-            raise TypeError("curve must provide the EllipticCurve interface.")
-
-        self._y = y
-        self._x = x
-        self._curve = curve
-
-    def public_key(self, backend: typing.Any = None) -> EllipticCurvePublicKey:
-        from cryptography.hazmat.backends.openssl.backend import (
-            backend as ossl,
-        )
-
-        return ossl.load_elliptic_curve_public_numbers(self)
-
-    @property
-    def curve(self) -> EllipticCurve:
-        return self._curve
-
-    @property
-    def x(self) -> int:
-        return self._x
-
-    @property
-    def y(self) -> int:
-        return self._y
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, EllipticCurvePublicNumbers):
-            return NotImplemented
-
-        return (
-            self.x == other.x
-            and self.y == other.y
-            and self.curve.name == other.curve.name
-            and self.curve.key_size == other.curve.key_size
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.x, self.y, self.curve.name, self.curve.key_size))
-
-    def __repr__(self) -> str:
-        return (
-            "<EllipticCurvePublicNumbers(curve={0.curve.name}, x={0.x}, "
-            "y={0.y}>".format(self)
-        )
-
-
-class EllipticCurvePrivateNumbers:
-    def __init__(
-        self, private_value: int, public_numbers: EllipticCurvePublicNumbers
-    ):
-        if not isinstance(private_value, int):
-            raise TypeError("private_value must be an integer.")
-
-        if not isinstance(public_numbers, EllipticCurvePublicNumbers):
-            raise TypeError(
-                "public_numbers must be an EllipticCurvePublicNumbers "
-                "instance."
-            )
-
-        self._private_value = private_value
-        self._public_numbers = public_numbers
-
-    def private_key(
-        self, backend: typing.Any = None
-    ) -> EllipticCurvePrivateKey:
-        from cryptography.hazmat.backends.openssl.backend import (
-            backend as ossl,
-        )
-
-        return ossl.load_elliptic_curve_private_numbers(self)
-
-    @property
-    def private_value(self) -> int:
-        return self._private_value
-
-    @property
-    def public_numbers(self) -> EllipticCurvePublicNumbers:
-        return self._public_numbers
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, EllipticCurvePrivateNumbers):
-            return NotImplemented
-
-        return (
-            self.private_value == other.private_value
-            and self.public_numbers == other.public_numbers
-        )
-
-    def __hash__(self) -> int:
-        return hash((self.private_value, self.public_numbers))
+    return rust_openssl.ec.derive_private_key(private_value, curve)
 
 
 class ECDH:
@@ -460,20 +356,10 @@ _OID_TO_CURVE = {
     EllipticCurveOID.BRAINPOOLP256R1: BrainpoolP256R1,
     EllipticCurveOID.BRAINPOOLP384R1: BrainpoolP384R1,
     EllipticCurveOID.BRAINPOOLP512R1: BrainpoolP512R1,
-    EllipticCurveOID.SECT163K1: SECT163K1,
-    EllipticCurveOID.SECT163R2: SECT163R2,
-    EllipticCurveOID.SECT233K1: SECT233K1,
-    EllipticCurveOID.SECT233R1: SECT233R1,
-    EllipticCurveOID.SECT283K1: SECT283K1,
-    EllipticCurveOID.SECT283R1: SECT283R1,
-    EllipticCurveOID.SECT409K1: SECT409K1,
-    EllipticCurveOID.SECT409R1: SECT409R1,
-    EllipticCurveOID.SECT571K1: SECT571K1,
-    EllipticCurveOID.SECT571R1: SECT571R1,
 }
 
 
-def get_curve_for_oid(oid: ObjectIdentifier) -> typing.Type[EllipticCurve]:
+def get_curve_for_oid(oid: ObjectIdentifier) -> type[EllipticCurve]:
     try:
         return _OID_TO_CURVE[oid]
     except KeyError:

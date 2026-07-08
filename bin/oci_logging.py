@@ -29,6 +29,23 @@ import uuid
 import logging as logger
 import certifi
 # Imports for Splunk Libraries
+class SplunklibSixRedirectFinder:
+    def find_spec(self, fullname, path, target=None):
+        if fullname.startswith("splunklib.six"):
+            global_name = fullname.replace("splunklib.six", "six", 1)
+            try:
+                mod = sys.modules.get(global_name)
+                if not mod:
+                    __import__(global_name)
+                    mod = sys.modules[global_name]
+                sys.modules[fullname] = mod
+                return getattr(mod, "__spec__", None)
+            except Exception:
+                pass
+        return None
+
+sys.meta_path.insert(0, SplunklibSixRedirectFinder())
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".", "lib"))
 from base64 import b64encode, b64decode
 from urllib.parse import urlparse
