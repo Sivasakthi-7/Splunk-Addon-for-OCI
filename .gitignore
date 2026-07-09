@@ -37,6 +37,10 @@ output/
 *.log
 *.pdf
 
+# SBOM / dependency scan output (syft, grype, etc.)
+*.cyclonedx.json
+/test.json
+
 # Temp files
 tmp/
 temp_wheel_download/
