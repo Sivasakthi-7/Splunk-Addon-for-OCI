@@ -7,7 +7,7 @@
 > **Updates included in this version (Release 3.2.0):**
 > 1. **Security Vulnerability Resolution:** Upgraded third-party dependencies to non-vulnerable versions: `cryptography` (to `48.0.1`), `pyopenssl` (to `26.0.0`), and `certifi` (to `2024.7.4`), achieving **0 security vulnerabilities** on SBOM scans.
 > 2. **Splunk 10 (Python 3.12/3.13) Compatibility:** Added a custom import finder (`SplunklibSixRedirectFinder`) inside [bin/oci_logging.py](file:///Users/apple/Downloads/TA-oci-logging-addon/bin/oci_logging.py) to resolve dynamic import issues of `splunklib.six.moves` that occur due to strict PEP 451 import machinery changes in Python 3.12+.
-> 3. **Multi-platform Binary Support:** Sourced and packaged both Linux `_rust.abi3.so` and Windows `_rust.pyd` binary extensions under `bin/cryptography/hazmat/bindings/` to enable fully native and cross-platform executions out-of-the-box.
+> 3. **Multi-platform Binary Support:** Sourced and packaged both Linux `_rust.abi3.so` and Windows `_rust.pyd` binary extensions under `bin/lib/cryptography/hazmat/bindings/` to enable fully native and cross-platform executions out-of-the-box.
 > 4. **Scoped Modular Input Runtime:** Scoped modular input configurations inside [default/inputs.conf](file:///Users/apple/Downloads/TA-oci-logging-addon/default/inputs.conf) to execute under `python3.9` or newer without overriding settings globally.
 
 ---
