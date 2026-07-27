@@ -12,13 +12,12 @@ jobs:
       fail-fast: false
       matrix:
         # win_amd64 / manylinux x86_64 are the two platforms this add-on
-        # bundles compiled binaries for (see BUILD.md). 3.9 represents
-        # Splunk 9.x's bundled runtime; 3.12/3.13 represent Splunk 10.x's
-        # -- and the pre-3.12 vs 3.12+ split matters here specifically
-        # because of the splunklib.six meta-path shim in oci_logging.py
-        # (PEP 451 stopped invoking find_module-only finders in 3.12).
+        # bundles compiled binaries for (see BUILD.md). 3.7/3.9/3.13 are
+        # the exact CPython tags cffi's _cffi_backend is vendored for
+        # (cp37/cp39/cp313), matching the Splunk-bundled runtimes this
+        # add-on targets (Splunk 8.x/9.x/10.x) -- not an arbitrary choice.
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.9", "3.12", "3.13"]
+        python-version: ["3.7", "3.9", "3.13"]
     steps:
       - uses: actions/checkout@v4
 

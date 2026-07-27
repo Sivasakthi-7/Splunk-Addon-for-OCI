@@ -53,14 +53,29 @@ environment you haven't confirmed is clean of the package everywhere on
 for its C-parsing / API-mode support); it is not otherwise used directly by
 this add-on.
 
+## `typing_extensions` is also a real runtime dependency
+
+Same lesson, different package: `pyOpenSSL` 26.0.0's own metadata declares
+`typing-extensions>=4.9; python_version < "3.13"` — `OpenSSL/crypto.py`
+does `from typing_extensions import deprecated` for interpreters older
+than 3.13 (which added `typing.deprecated` natively via PEP 702).
+`cryptography/hazmat/asn1/asn1.py` references it too. It went unvendored
+for the same reason `cffi` briefly did: both the local dev machine and
+the Splunk Docker container used to verify this add-on happened to
+already have `typing_extensions` installed system-wide, masking the gap.
+A clean CI matrix that actually includes a pre-3.13 interpreter (3.7 and
+3.9 here) is what caught it. It's pure Python — no per-platform or
+per-Python-tag binary needed, just the one vendored copy.
+
 ## Currently vendored targets
 
-| Package        | Version | Python tags        | Platforms                    |
-|-----------------|---------|---------------------|-------------------------------|
-| cffi           | 1.17.1  | cp37, cp39, cp313   | win_amd64, manylinux x86_64  |
-| cryptography   | 48.0.1  | abi3 (py3.8+)       | win_amd64, manylinux x86_64  |
-| pyOpenSSL      | 26.0.0  | pure Python         | n/a                           |
-| certifi        | 2024.7.4| pure Python         | n/a                           |
+| Package           | Version | Python tags        | Platforms                    |
+|--------------------|---------|---------------------|-------------------------------|
+| cffi              | 1.17.1  | cp37, cp39, cp313   | win_amd64, manylinux x86_64  |
+| cryptography      | 48.0.1  | abi3 (py3.8+)       | win_amd64, manylinux x86_64  |
+| pyOpenSSL         | 26.0.0  | pure Python         | n/a                           |
+| certifi           | 2024.7.4| pure Python         | n/a                           |
+| typing_extensions | 4.16.0  | pure Python         | n/a                           |
 
 ## Reproducing a binary
 
