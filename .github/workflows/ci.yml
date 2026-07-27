@@ -12,12 +12,16 @@ jobs:
       fail-fast: false
       matrix:
         # win_amd64 / manylinux x86_64 are the two platforms this add-on
-        # bundles compiled binaries for (see BUILD.md). 3.7/3.9/3.13 are
-        # the exact CPython tags cffi's _cffi_backend is vendored for
-        # (cp37/cp39/cp313), matching the Splunk-bundled runtimes this
-        # add-on targets (Splunk 8.x/9.x/10.x) -- not an arbitrary choice.
+        # bundles compiled binaries for (see BUILD.md). 3.9/3.13 are the
+        # exact CPython tags cffi's _cffi_backend is vendored for
+        # (cp39/cp313), matching the Splunk-bundled runtimes this add-on
+        # targets (Splunk 9.x/10.x). Python 3.7 is NOT supported: the
+        # vendored cryptography 48.0.1 wheel is built cp39-abi3 (see
+        # BUILD.md) -- it cannot load on 3.7 under any circumstances,
+        # a hard ABI floor, not a vendoring gap. ubuntu-latest (24.04)
+        # also has no 3.7 build available via setup-python at all.
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.7", "3.9", "3.13"]
+        python-version: ["3.9", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
