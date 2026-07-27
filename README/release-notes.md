@@ -4,10 +4,10 @@
 - Added multi-platform binary support for `cryptography` by bundling both Linux `_rust.abi3.so` and Windows `_rust.pyd` extensions.
 - Resolved Python 3.12+ (Splunk 10.x+) compatibility issues by introducing `SplunklibSixRedirectFinder` inside `oci_logging.py` to dynamically intercept and redirect legacy `splunklib.six.moves` imports.
 - Moved all vendored third-party libraries from `bin/` into `bin/lib/` to stop generically-named packages (`OpenSSL`, `cryptography`, `six`, `certifi`, `oci`, etc.) from shadowing, or being shadowed by, other Splunk apps' same-named vendored copies when Splunk reuses a shared Python worker process across apps.
-- Removed `cffi` and `pycparser` from vendoring entirely: confirmed (via static analysis and a live import/functional test under the real Splunk-bundled Python) that nothing on the runtime path needs them now that `cryptography` 48.x is fully Rust/abi3-based, and `pycparser` had been silently broken (missing `c_lexer.py`) for several releases without anything using it.
 - Removed the stale `bin/linux_x86_64/bin/oci_logging.py` duplicate (2021-era, inert — outside the path Splunk actually resolves platform-specific scripts from).
 - Completed `README/inputs.conf.spec` to also declare the bare `[oci_logging]` stanza (matching the scheme-default values in `default/inputs.conf`), clearing "Invalid key in stanza [oci_logging]" warnings at Splunk startup.
 - Removed unreachable dead code in `stream_events()`'s multiprocessing result handling (`isinstance(results, str)`/`isinstance(results, int)` branches could never match, since `results` is always a list of `AsyncResult` objects).
+- Added a GitHub Actions CI matrix (`tests/test_bin_lib_imports.py`) exercising the vendored `bin/lib` import chain across Windows/Linux and the supported Python versions on clean runners — this is what caught `cffi`/`_cffi_backend` actually being required by the vendored `cryptography` build, after a same-day attempt to remove it as "unused" was masked by ambient `cffi` installs on the machines used to verify that change by hand.
 
 ## Release 3.1.0
 - Added Python 3.9 compatibility support for Splunk Enterprise 9.x+ (Linux and Windows x86_64).

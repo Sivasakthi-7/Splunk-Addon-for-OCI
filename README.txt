@@ -1,3 +1,4 @@
 # Binary File Declaration
+bin/lib/_cffi_backend.cpython-37m-x86_64-linux-gnu.so: This binary file is provided along with the cffi module (required by the vendored cryptography build) and source code for the same can be found at https://pypi.org/project/cffi/
 bin/lib/cryptography/hazmat/bindings/_rust.abi3.so: This binary file is provided along with the cryptography module (abi3, covers all supported Python 3 versions) and source code for the same can be found at https://pypi.org/project/cryptography/
 bin/lib/cryptography/hazmat/bindings/_rust.pyd: This binary file is provided along with the cryptography module (abi3, covers all supported Python 3 versions) and source code for the same can be found at https://pypi.org/project/cryptography/
