@@ -1,5 +1,6 @@
 [oci_logging://<name>]
 python.version = python3
+python.required = 3.9, 3.13
 stream_id =
 stream_endpoint =
 oci_region = ex: us-phoenix-1
@@ -22,6 +23,7 @@ retry_interval =
 # [oci_logging]" warnings at startup for the bare defaults stanza.
 [oci_logging]
 python.version = python3
+python.required = 3.9, 3.13
 stream_id =
 stream_endpoint =
 oci_region = ex: us-phoenix-1
