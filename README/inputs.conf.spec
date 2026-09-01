@@ -1,4 +1,6 @@
 [oci_logging://<name>]
+python.version = python3
+python.required = 3.9, 3.13
 stream_id =
 stream_endpoint =
 oci_region = ex: us-phoenix-1
@@ -20,6 +22,8 @@ retry_interval =
 # stanzas against the block above and logs "Invalid key in stanza
 # [oci_logging]" warnings at startup for the bare defaults stanza.
 [oci_logging]
+python.version = python3
+python.required = 3.9, 3.13
 stream_id =
 stream_endpoint =
 oci_region = ex: us-phoenix-1
